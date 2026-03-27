@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from ..analyzer.service import AnalyzerServiceImpl
 from ..collector.service import CollectorServiceImpl
@@ -46,5 +50,14 @@ def create_app(
     app.include_router(signals.router)
     app.include_router(validator.router)
     app.include_router(token_analysis.router)
+
+    # Serve dashboard at root
+    static_dir = Path(__file__).parent / "static"
+
+    @app.get("/", include_in_schema=False)
+    async def dashboard():
+        return FileResponse(static_dir / "index.html")
+
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     return app

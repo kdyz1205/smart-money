@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Money Chain Agent</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #0f1117; color: #e1e4e8; font-family: 'Segoe UI', system-ui, sans-serif; }
+  .glass { background: rgba(22, 27, 34, 0.8); border: 1px solid rgba(48, 54, 61, 0.8); backdrop-filter: blur(10px); }
+  .glow-green { box-shadow: 0 0 20px rgba(46, 160, 67, 0.15); }
+  .glow-red { box-shadow: 0 0 20px rgba(248, 81, 73, 0.15); }
+  .glow-blue { box-shadow: 0 0 20px rgba(56, 132, 255, 0.15); }
+  .glow-yellow { box-shadow: 0 0 20px rgba(210, 153, 34, 0.15); }
+  .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .badge { font-size: 10px; padding: 2px 8px; border-radius: 9999px; font-weight: 600; text-transform: uppercase; }
+  .score-bar { height: 6px; border-radius: 3px; background: #21262d; overflow: hidden; }
+  .score-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+  .tab-active { border-bottom: 2px solid #58a6ff; color: #58a6ff; }
+  .tab { cursor: pointer; padding: 12px 20px; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .tab:hover { color: #58a6ff; }
+  input, select { background: #0d1117; border: 1px solid #30363d; color: #e1e4e8; }
+  input:focus, select:focus { outline: none; border-color: #58a6ff; box-shadow: 0 0 0 3px rgba(56, 132, 255, 0.1); }
+  .spinner { border: 3px solid #30363d; border-top: 3px solid #58a6ff; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .fade-in { animation: fadeIn 0.3s ease-in; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #0d1117; }
+  ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Header -->
+<header class="glass sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
+  <div class="flex items-center gap-3">
+    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-sm">SM</div>
+    <h1 class="text-lg font-bold">Smart Money Chain Agent</h1>
+    <span class="badge bg-green-900 text-green-400" id="statusBadge">LIVE</span>
+  </div>
+  <div class="flex items-center gap-4 text-sm text-gray-400">
+    <span id="clock"></span>
+  </div>
+</header>
+
+<!-- Tabs -->
+<nav class="glass border-t-0 px-6 flex gap-0 text-sm font-medium">
+  <div class="tab tab-active" data-tab="search" onclick="switchTab('search')">Token Analysis</div>
+  <div class="tab" data-tab="monitor" onclick="switchTab('monitor')">Smart Money Monitor</div>
+  <div class="tab" data-tab="wallet" onclick="switchTab('wallet')">My Wallet</div>
+  <div class="tab" data-tab="signals" onclick="switchTab('signals')">Signals & Alerts</div>
+</nav>
+
+<!-- Content -->
+<main class="max-w-7xl mx-auto px-6 py-6">
+
+  <!-- Tab 1: Token Search & Analysis -->
+  <section id="tab-search" class="fade-in">
+    <!-- Search Bar -->
+    <div class="glass rounded-xl p-6 mb-6">
+      <div class="flex gap-3">
+        <div class="flex-1 relative">
+          <input type="text" id="tokenInput" placeholder="Enter token address or name (e.g. copperinu, 61Wj56Qg...)"
+                 class="w-full px-4 py-3 rounded-lg text-sm" onkeydown="if(event.key==='Enter')analyzeToken()">
+        </div>
+        <select id="networkSelect" class="px-4 py-3 rounded-lg text-sm w-36">
+          <option value="solana">Solana</option>
+          <option value="ethereum">Ethereum</option>
+          <option value="bsc">BSC</option>
+          <option value="base">Base</option>
+          <option value="arbitrum">Arbitrum</option>
+        </select>
+        <button onclick="analyzeToken()" class="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          Analyze
+        </button>
+      </div>
+      <div class="flex gap-2 mt-3">
+        <span class="text-xs text-gray-500">Quick:</span>
+        <button onclick="quickSearch('copperinu')" class="text-xs px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 transition">CopperInu</button>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading" class="hidden text-center py-12">
+      <div class="spinner mx-auto mb-3"></div>
+      <p class="text-sm text-gray-400">Analyzing on-chain data...</p>
+    </div>
+
+    <!-- Results -->
+    <div id="results" class="hidden fade-in">
+      <!-- Overview Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="glass rounded-xl p-4 glow-blue">
+          <div class="text-xs text-gray-400 mb-1">Price</div>
+          <div class="text-xl font-bold" id="r-price">-</div>
+          <div class="text-xs mt-1" id="r-change">-</div>
+        </div>
+        <div class="glass rounded-xl p-4">
+          <div class="text-xs text-gray-400 mb-1">Market Cap</div>
+          <div class="text-xl font-bold" id="r-mcap">-</div>
+        </div>
+        <div class="glass rounded-xl p-4">
+          <div class="text-xs text-gray-400 mb-1">24h Volume</div>
+          <div class="text-xl font-bold" id="r-vol">-</div>
+        </div>
+        <div class="glass rounded-xl p-4">
+          <div class="text-xs text-gray-400 mb-1">Liquidity</div>
+          <div class="text-xl font-bold" id="r-liq">-</div>
+        </div>
+      </div>
+
+      <!-- Signal Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="glass rounded-xl p-4" id="card-sm">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-medium">Smart Money</span>
+            <span class="badge bg-gray-800 text-gray-300" id="r-sm-count">-</span>
+          </div>
+          <div id="r-sm-list" class="space-y-2 text-xs"></div>
+        </div>
+        <div class="glass rounded-xl p-4" id="card-surge">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-medium">Volume Surge</span>
+            <span class="badge" id="r-surge-badge">-</span>
+          </div>
+          <div id="r-surge-detail" class="text-xs text-gray-400"></div>
+        </div>
+        <div class="glass rounded-xl p-4" id="card-acc">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-medium">Accumulation</span>
+            <span class="badge" id="r-acc-badge">-</span>
+          </div>
+          <div id="r-acc-detail" class="text-xs text-gray-400"></div>
+        </div>
+      </div>
+
+      <!-- Trade Activity -->
+      <div class="glass rounded-xl p-4 mb-6">
+        <h3 class="text-sm font-medium mb-3">Trade Activity</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div><span class="text-gray-400">Trades:</span> <span id="r-trades">-</span></div>
+          <div><span class="text-gray-400">Wallets:</span> <span id="r-wallets">-</span></div>
+          <div><span class="text-gray-400">Buy/Sell:</span> <span id="r-buysell">-</span></div>
+          <div><span class="text-gray-400">Net Flow:</span> <span id="r-netflow">-</span></div>
+        </div>
+        <!-- Buy/Sell Bar -->
+        <div class="mt-3 flex items-center gap-2">
+          <span class="text-xs text-green-400" id="r-buypct">-</span>
+          <div class="flex-1 h-3 rounded-full bg-gray-800 overflow-hidden flex">
+            <div class="bg-green-500 transition-all" id="r-buybar" style="width:50%"></div>
+            <div class="bg-red-500 transition-all" id="r-sellbar" style="width:50%"></div>
+          </div>
+          <span class="text-xs text-red-400" id="r-sellpct">-</span>
+        </div>
+      </div>
+
+      <!-- Summary -->
+      <div class="glass rounded-xl p-4 mb-6">
+        <h3 class="text-sm font-medium mb-2">Analysis Summary</h3>
+        <pre class="text-xs text-gray-300 whitespace-pre-wrap leading-relaxed" id="r-summary">-</pre>
+      </div>
+
+      <!-- All Wallets Table -->
+      <div class="glass rounded-xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-medium">Wallet Ranking</h3>
+          <span class="text-xs text-gray-400" id="r-wallet-count">-</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="text-gray-400 border-b border-gray-800">
+                <th class="text-left py-2 px-2">#</th>
+                <th class="text-left py-2 px-2">Address</th>
+                <th class="text-right py-2 px-2">Score</th>
+                <th class="text-right py-2 px-2">Volume</th>
+                <th class="text-right py-2 px-2">Txns</th>
+                <th class="text-center py-2 px-2">Status</th>
+                <th class="text-center py-2 px-2">Action</th>
+              </tr>
+            </thead>
+            <tbody id="r-wallet-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tab 2: Smart Money Monitor -->
+  <section id="tab-monitor" class="hidden fade-in">
+    <div class="glass rounded-xl p-6 mb-6">
+      <h2 class="text-lg font-bold mb-4">Smart Money Watchlist</h2>
+      <div class="flex gap-3 mb-4">
+        <input type="text" id="watchInput" placeholder="Add wallet address to monitor..." class="flex-1 px-4 py-2 rounded-lg text-sm">
+        <button onclick="addToWatchlist()" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium transition">+ Add</button>
+      </div>
+      <div id="watchlist" class="space-y-2"></div>
+      <div id="watchlistEmpty" class="text-center py-8 text-gray-500 text-sm">
+        No wallets being monitored. Add addresses above to start tracking smart money.
+      </div>
+    </div>
+
+    <!-- SM Addresses from system -->
+    <div class="glass rounded-xl p-6">
+      <h3 class="text-sm font-medium mb-3">System-Detected Smart Money</h3>
+      <div id="systemSM" class="text-sm text-gray-400">
+        Run a token analysis first to discover smart money wallets.
+      </div>
+    </div>
+  </section>
+
+  <!-- Tab 3: My Wallet -->
+  <section id="tab-wallet" class="hidden fade-in">
+    <div class="glass rounded-xl p-6 mb-6">
+      <h2 class="text-lg font-bold mb-4">My Wallet</h2>
+      <div class="flex gap-3 mb-4">
+        <input type="text" id="myWalletInput" placeholder="Enter your wallet address..." class="flex-1 px-4 py-2 rounded-lg text-sm" value="">
+        <button onclick="setMyWallet()" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium transition">Connect</button>
+      </div>
+    </div>
+    <div id="myWalletInfo" class="glass rounded-xl p-6">
+      <div class="text-center py-8 text-gray-500 text-sm">
+        Connect your wallet address above to view your portfolio and get personalized alerts.
+      </div>
+    </div>
+  </section>
+
+  <!-- Tab 4: Signals & Alerts -->
+  <section id="tab-signals" class="hidden fade-in">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="glass rounded-xl p-6">
+        <h3 class="text-sm font-medium mb-3">Latest Signals</h3>
+        <div id="signalsList" class="space-y-3">
+          <div class="text-sm text-gray-500 text-center py-4">No signals yet. Analyze tokens to generate signals.</div>
+        </div>
+      </div>
+      <div class="glass rounded-xl p-6">
+        <h3 class="text-sm font-medium mb-3">Fill Speed Alerts</h3>
+        <div id="alertsList" class="space-y-3">
+          <div class="text-sm text-gray-500 text-center py-4">No alerts detected.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Analysis History -->
+    <div class="glass rounded-xl p-6 mt-6">
+      <h3 class="text-sm font-medium mb-3">Analysis History</h3>
+      <div id="historyList" class="space-y-2"></div>
+      <div id="historyEmpty" class="text-sm text-gray-500 text-center py-4">No analysis performed yet.</div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const API = '';  // same origin
+let analysisHistory = JSON.parse(localStorage.getItem('analysisHistory') || '[]');
+let watchlist = JSON.parse(localStorage.getItem('watchlist') || '[]');
+let lastAnalysis = null;
+
+// Clock
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', {hour12: false});
+}, 1000);
+
+// Tabs
+function switchTab(tab) {
+  document.querySelectorAll('[data-tab]').forEach(el => el.classList.remove('tab-active'));
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('tab-active');
+  document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden'));
+  document.getElementById(`tab-${tab}`).classList.remove('hidden');
+  if (tab === 'monitor') renderWatchlist();
+  if (tab === 'signals') renderHistory();
+}
+
+// Quick search
+function quickSearch(name) {
+  document.getElementById('tokenInput').value = name;
+  analyzeToken();
+}
+
+// Main analysis
+async function analyzeToken() {
+  const input = document.getElementById('tokenInput').value.trim();
+  if (!input) return;
+
+  const network = document.getElementById('networkSelect').value;
+  document.getElementById('loading').classList.remove('hidden');
+  document.getElementById('results').classList.add('hidden');
+
+  let url;
+  if (input.toLowerCase() === 'copperinu') {
+    url = `${API}/token/analyze/copperinu`;
+  } else {
+    url = `${API}/token/analyze/${input}?network=${network}`;
+  }
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.detail || 'Analysis failed');
+      return;
+    }
+    const data = await res.json();
+    lastAnalysis = data;
+    renderResults(data);
+    saveHistory(input, data);
+  } catch (e) {
+    alert('Connection error: ' + e.message);
+  } finally {
+    document.getElementById('loading').classList.add('hidden');
+  }
+}
+
+function fmt(n, d=0) {
+  if (n == null) return '-';
+  if (Math.abs(n) >= 1e6) return '$' + (n/1e6).toFixed(2) + 'M';
+  if (Math.abs(n) >= 1e3) return '$' + (n/1e3).toFixed(1) + 'K';
+  return '$' + n.toFixed(d);
+}
+
+function renderResults(d) {
+  const o = d.overview, t = d.trade_activity;
+
+  // Overview
+  document.getElementById('r-price').textContent = '$' + o.price_usd.toFixed(6);
+  const ch = o.price_change_24h_pct || 0;
+  const chEl = document.getElementById('r-change');
+  chEl.textContent = (ch >= 0 ? '+' : '') + ch.toFixed(2) + '% 24h';
+  chEl.className = 'text-xs mt-1 ' + (ch >= 0 ? 'text-green-400' : 'text-red-400');
+  document.getElementById('r-mcap').textContent = fmt(o.market_cap_usd);
+  document.getElementById('r-vol').textContent = fmt(o.volume_24h_usd);
+  document.getElementById('r-liq').textContent = fmt(o.liquidity_usd);
+
+  // Trade activity
+  document.getElementById('r-trades').textContent = t.total_trades;
+  document.getElementById('r-wallets').textContent = t.unique_wallets;
+  document.getElementById('r-buysell').textContent = `${t.buy_count} / ${t.sell_count}`;
+  const nf = t.net_flow_usd;
+  const nfEl = document.getElementById('r-netflow');
+  nfEl.textContent = (nf >= 0 ? '+' : '') + fmt(nf, 0);
+  nfEl.className = nf >= 0 ? 'text-green-400' : 'text-red-400';
+
+  const total = t.buy_count + t.sell_count || 1;
+  const buyPct = Math.round(t.buy_count / total * 100);
+  document.getElementById('r-buypct').textContent = buyPct + '%';
+  document.getElementById('r-sellpct').textContent = (100 - buyPct) + '%';
+  document.getElementById('r-buybar').style.width = buyPct + '%';
+  document.getElementById('r-sellbar').style.width = (100 - buyPct) + '%';
+
+  // Smart money
+  const sm = d.smart_money_wallets;
+  document.getElementById('r-sm-count').textContent = sm.length + ' found';
+  const smCard = document.getElementById('card-sm');
+  smCard.className = 'glass rounded-xl p-4 ' + (sm.length > 0 ? 'glow-green' : '');
+  const smList = document.getElementById('r-sm-list');
+  if (sm.length === 0) {
+    smList.innerHTML = '<div class="text-gray-500">No smart money detected in current window</div>';
+  } else {
+    smList.innerHTML = sm.slice(0, 5).map(w => `
+      <div class="flex items-center justify-between py-1">
+        <span class="font-mono text-gray-300">${w.address.slice(0,16)}...</span>
+        <div class="flex items-center gap-2">
+          <div class="score-bar w-16"><div class="score-fill bg-green-500" style="width:${w.smart_money_score*100}%"></div></div>
+          <span>${(w.smart_money_score*100).toFixed(0)}%</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // Volume surge
+  const vs = d.volume_surge;
+  const surgeB = document.getElementById('r-surge-badge');
+  const surgeCard = document.getElementById('card-surge');
+  const surgeD = document.getElementById('r-surge-detail');
+  if (vs) {
+    surgeB.textContent = vs.is_stealth_accumulation ? 'STEALTH' : 'DETECTED';
+    surgeB.className = 'badge ' + (vs.is_stealth_accumulation ? 'bg-yellow-900 text-yellow-400' : 'bg-red-900 text-red-400');
+    surgeCard.className = 'glass rounded-xl p-4 ' + (vs.is_stealth_accumulation ? 'glow-yellow' : 'glow-red');
+    surgeD.innerHTML = `SM Ratio: <strong>${(vs.sm_volume_ratio*100).toFixed(1)}%</strong><br>vs 24h: <strong>${vs.vs_24h_avg_multiplier}x</strong><br>Net Buy: <strong>${fmt(vs.net_buy_volume_usd)}</strong>`;
+  } else {
+    surgeB.textContent = 'NONE';
+    surgeB.className = 'badge bg-gray-800 text-gray-400';
+    surgeCard.className = 'glass rounded-xl p-4';
+    surgeD.textContent = 'No volume surge detected';
+  }
+
+  // Accumulation
+  const acc = d.accumulation;
+  const accB = document.getElementById('r-acc-badge');
+  const accCard = document.getElementById('card-acc');
+  const accD = document.getElementById('r-acc-detail');
+  if (acc.detected) {
+    accB.textContent = Math.round(acc.buy_probability*100) + '%';
+    accB.className = 'badge bg-green-900 text-green-400';
+    accCard.className = 'glass rounded-xl p-4 glow-green';
+    accD.innerHTML = `Buy Probability: <strong>${(acc.buy_probability*100).toFixed(0)}%</strong><br>Momentum: <strong>${acc.momentum_score.toFixed(3)}</strong><br>Wallets: <strong>${acc.participating_wallets}</strong>`;
+  } else {
+    accB.textContent = 'NONE';
+    accB.className = 'badge bg-gray-800 text-gray-400';
+    accCard.className = 'glass rounded-xl p-4';
+    accD.textContent = 'No accumulation pattern detected';
+  }
+
+  // Summary
+  document.getElementById('r-summary').textContent = d.summary;
+
+  // Wallet table
+  const wallets = d.all_wallets;
+  document.getElementById('r-wallet-count').textContent = wallets.length + ' wallets';
+  const tbody = document.getElementById('r-wallet-table');
+  tbody.innerHTML = wallets.slice(0, 30).map((w, i) => `
+    <tr class="border-b border-gray-800/50 hover:bg-gray-800/30 transition">
+      <td class="py-2 px-2 text-gray-500">${i+1}</td>
+      <td class="py-2 px-2 font-mono text-xs">${w.address.slice(0,20)}...</td>
+      <td class="py-2 px-2 text-right">
+        <div class="flex items-center justify-end gap-2">
+          <div class="score-bar w-12"><div class="score-fill ${w.smart_money_score > 0.3 ? 'bg-green-500' : w.smart_money_score > 0.2 ? 'bg-yellow-500' : 'bg-gray-500'}" style="width:${w.smart_money_score*100}%"></div></div>
+          ${(w.smart_money_score*100).toFixed(1)}
+        </div>
+      </td>
+      <td class="py-2 px-2 text-right">${fmt(w.total_volume_usd)}</td>
+      <td class="py-2 px-2 text-right">${w.tx_count}</td>
+      <td class="py-2 px-2 text-center">${w.is_smart_money ? '<span class="badge bg-green-900 text-green-400">SM</span>' : '<span class="badge bg-gray-800 text-gray-500">Normal</span>'}</td>
+      <td class="py-2 px-2 text-center">
+        <button onclick="addToWatchlistAddr('${w.address}')" class="text-blue-400 hover:text-blue-300 text-xs">+ Watch</button>
+      </td>
+    </tr>
+  `).join('');
+
+  document.getElementById('results').classList.remove('hidden');
+
+  // Update signals tab
+  if (d.fill_speed_alerts.length > 0 || vs) {
+    updateSignals(d);
+  }
+}
+
+// Watchlist
+function addToWatchlist() {
+  const addr = document.getElementById('watchInput').value.trim();
+  if (!addr) return;
+  addToWatchlistAddr(addr);
+  document.getElementById('watchInput').value = '';
+}
+
+function addToWatchlistAddr(addr) {
+  if (watchlist.includes(addr)) return;
+  watchlist.push(addr);
+  localStorage.setItem('watchlist', JSON.stringify(watchlist));
+  renderWatchlist();
+}
+
+function removeFromWatchlist(addr) {
+  watchlist = watchlist.filter(a => a !== addr);
+  localStorage.setItem('watchlist', JSON.stringify(watchlist));
+  renderWatchlist();
+}
+
+function renderWatchlist() {
+  const el = document.getElementById('watchlist');
+  const empty = document.getElementById('watchlistEmpty');
+  if (watchlist.length === 0) {
+    el.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  el.innerHTML = watchlist.map(addr => `
+    <div class="flex items-center justify-between glass rounded-lg p-3">
+      <span class="font-mono text-sm">${addr.slice(0, 24)}${addr.length > 24 ? '...' : ''}</span>
+      <div class="flex gap-2">
+        <span class="badge bg-blue-900 text-blue-400">Monitoring</span>
+        <button onclick="removeFromWatchlist('${addr}')" class="text-red-400 hover:text-red-300 text-xs">Remove</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// My wallet
+function setMyWallet() {
+  const addr = document.getElementById('myWalletInput').value.trim();
+  if (!addr) return;
+  localStorage.setItem('myWallet', addr);
+  document.getElementById('myWalletInfo').innerHTML = `
+    <div class="text-center py-6">
+      <div class="text-sm text-gray-400 mb-2">Connected Wallet</div>
+      <div class="font-mono text-sm mb-4">${addr}</div>
+      <div class="text-xs text-gray-500">Portfolio tracking will be available when connected to a blockchain RPC endpoint.</div>
+    </div>
+  `;
+}
+
+// History
+function saveHistory(query, data) {
+  analysisHistory.unshift({
+    query, token: data.overview.token_symbol, price: data.overview.price_usd,
+    mcap: data.overview.market_cap_usd, time: new Date().toISOString(),
+    sm_count: data.smart_money_wallets.length,
+    surge: !!data.volume_surge,
+  });
+  if (analysisHistory.length > 50) analysisHistory = analysisHistory.slice(0, 50);
+  localStorage.setItem('analysisHistory', JSON.stringify(analysisHistory));
+}
+
+function renderHistory() {
+  const el = document.getElementById('historyList');
+  const empty = document.getElementById('historyEmpty');
+  if (analysisHistory.length === 0) { empty.classList.remove('hidden'); el.innerHTML = ''; return; }
+  empty.classList.add('hidden');
+  el.innerHTML = analysisHistory.slice(0, 20).map(h => `
+    <div class="flex items-center justify-between glass rounded-lg p-3 cursor-pointer hover:bg-gray-800/50" onclick="document.getElementById('tokenInput').value='${h.query}';switchTab('search');analyzeToken();">
+      <div class="flex items-center gap-3">
+        <span class="font-bold text-sm">${h.token}</span>
+        <span class="text-xs text-gray-400">$${h.price.toFixed(6)}</span>
+        ${h.surge ? '<span class="badge bg-red-900 text-red-400">SURGE</span>' : ''}
+        ${h.sm_count > 0 ? '<span class="badge bg-green-900 text-green-400">SM:' + h.sm_count + '</span>' : ''}
+      </div>
+      <span class="text-xs text-gray-500">${new Date(h.time).toLocaleString()}</span>
+    </div>
+  `).join('');
+}
+
+function updateSignals(d) {
+  const sl = document.getElementById('signalsList');
+  const al = document.getElementById('alertsList');
+  let signals = [];
+  if (d.volume_surge) signals.push({type: 'Volume Surge', detail: `SM ratio ${(d.volume_surge.sm_volume_ratio*100).toFixed(1)}%${d.volume_surge.is_stealth_accumulation ? ' (STEALTH)' : ''}`, level: d.volume_surge.is_stealth_accumulation ? 'yellow' : 'red'});
+  if (d.accumulation.detected) signals.push({type: 'Accumulation', detail: `${(d.accumulation.buy_probability*100).toFixed(0)}% probability`, level: 'green'});
+  if (d.coordinated_buying.detected) signals.push({type: 'Coordinated Buy', detail: `${d.coordinated_buying.count} wallets`, level: 'blue'});
+  if (signals.length > 0) {
+    sl.innerHTML = signals.map(s => `
+      <div class="glass rounded-lg p-3 glow-${s.level}">
+        <div class="flex items-center justify-between">
+          <span class="font-medium text-sm">${s.type}</span>
+          <span class="badge bg-${s.level}-900 text-${s.level}-400">${d.overview.token_symbol}</span>
+        </div>
+        <div class="text-xs text-gray-400 mt-1">${s.detail}</div>
+      </div>
+    `).join('');
+  }
+
+  if (d.fill_speed_alerts.length > 0) {
+    al.innerHTML = d.fill_speed_alerts.map(a => `
+      <div class="glass rounded-lg p-3 glow-red">
+        <div class="font-mono text-xs">${a.wallet.slice(0,20)}...</div>
+        <div class="text-xs text-gray-400 mt-1">Speed: $${a.fill_speed_usd_per_sec.toFixed(4)}/s | Rapid: ${a.num_rapid_trades} trades</div>
+      </div>
+    `).join('');
+  }
+}
+
+// Init
+renderWatchlist();
+renderHistory();
+const savedWallet = localStorage.getItem('myWallet');
+if (savedWallet) { document.getElementById('myWalletInput').value = savedWallet; setMyWallet(); }
+</script>
+</body>
+</html>
