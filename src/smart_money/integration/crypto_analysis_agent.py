@@ -121,7 +121,8 @@ class CryptoAnalysisAgent:
         try:
             if self._session is None or self._session.closed:
                 self._session = aiohttp.ClientSession(
-                    timeout=aiohttp.ClientTimeout(total=10)
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    trust_env=True,
                 )
 
             # OKX market ticker endpoint

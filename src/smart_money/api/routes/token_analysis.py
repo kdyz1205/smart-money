@@ -13,6 +13,7 @@ converts to our Transaction model, and runs:
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -134,7 +135,7 @@ async def _fetch_dexscreener_overview(token_address: str) -> dict | None:
     """Fetch token overview from DexScreener."""
     url = f"{DEXSCREENER_BASE}/tokens/{token_address}"
     try:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(trust_env=True) as session:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 if resp.status != 200:
                     logger.warning("DexScreener returned %d", resp.status)
@@ -159,7 +160,7 @@ async def _fetch_gecko_trades(network: str, pool_address: str) -> list[dict]:
     url = f"{GECKO_TERMINAL_BASE}/networks/{network}/pools/{pool_address}/trades"
     all_trades: list[dict] = []
     try:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(trust_env=True) as session:
             # Fetch multiple pages for more data
             for _page in range(3):
                 params = {"trade_volume_in_usd_greater_than": "10"}
@@ -189,7 +190,7 @@ def _gecko_trades_to_transactions(
     """Convert GeckoTerminal trade data to our Transaction model."""
     chain = NETWORK_TO_CHAIN.get(network, Chain.SOL)
     txs: list[Transaction] = []
-    for trade in trades:
+    for i, trade in enumerate(trades):
         attrs = trade.get("attributes", {})
         tx_hash = attrs.get("tx_hash", str(uuid.uuid4()))
         kind = attrs.get("kind", "buy")  # "buy" or "sell"
@@ -215,14 +216,10 @@ def _gecko_trades_to_transactions(
         # Convert volume to a wei-like integer (scale by 1e18 for pipeline compatibility)
         value_wei = int(volume_usd * 1e12)  # scale factor for analysis
 
-        # For buys: from_addr is the buyer (to token contract)
-        # For sells: from_addr is the seller (from token contract)
-        if kind == "buy":
-            tx_from = from_addr
-            tx_to = token_address
-        else:
-            tx_from = from_addr
-            tx_to = "pool"  # selling to pool
+        # For buys: from_addr is the buyer (sending SOL to pool)
+        # For sells: from_addr is the seller (sending tokens to pool)
+        tx_from = from_addr if from_addr and from_addr != "unknown" else f"anon_{i}"
+        tx_to = token_address if kind == "buy" else f"pool_{token_address[:8]}"
 
         txs.append(
             Transaction(
@@ -247,6 +244,7 @@ def _gecko_trades_to_transactions(
 
 def _run_wallet_analysis(
     txs: list[Transaction],
+    token_address: str = "",
 ) -> tuple[list[WalletProfile], list[WalletFeatures], list[WalletAnalysis]]:
     """Extract features, cluster, detect anomalies, score wallets."""
     features = extract_features(txs)
@@ -278,9 +276,22 @@ def _run_wallet_analysis(
             if profile.is_smart_money:
                 profile.labels.append("smart_money")
 
+    # Filter out contract/pool addresses and the token contract itself
+    exclude_addrs = {
+        addr.lower() for addr in [
+            "unknown", "pool", token_address,
+        ] if addr
+    }
+    # Also exclude any address that looks like a pool or contract placeholder
+    for f in features:
+        if f.address.startswith("pool_") or f.address.startswith("anon_"):
+            exclude_addrs.add(f.address)
+
     # Build wallet analysis list
     wallet_analyses = []
     for profile in profiles:
+        if profile.address.lower() in exclude_addrs:
+            continue
         feat = feat_map.get(profile.address.lower())
         wallet_analyses.append(
             WalletAnalysis(
@@ -519,7 +530,7 @@ async def analyze_token(
     )
 
     # Step 4: Run wallet analysis pipeline
-    profiles, features, wallet_analyses = _run_wallet_analysis(txs)
+    profiles, features, wallet_analyses = _run_wallet_analysis(txs, token_address=token_address)
     smart_wallets = [w for w in wallet_analyses if w.is_smart_money]
 
     # Step 5: Fill speed alerts
