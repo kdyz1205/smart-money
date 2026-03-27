@@ -29,6 +29,7 @@ from .integration.smart_money_agent import SmartMoneyAgent
 from .predictor.service import PredictorServiceImpl
 from .shared.config import Settings
 from .shared.events import EventBus
+from .validator.service import ValidatorService
 
 
 async def main() -> None:
@@ -63,6 +64,7 @@ async def main() -> None:
     )
     analyzer = AnalyzerServiceImpl(event_bus=event_bus)
     predictor = PredictorServiceImpl(event_bus=event_bus)
+    validator = ValidatorService(event_bus=event_bus)
 
     # Pre-load tracked wallets
     for addr in config.tracked_wallets:
@@ -81,6 +83,7 @@ async def main() -> None:
         event_bus=event_bus,
         smart_money_agent=smart_money,
         crypto_agent=crypto_agent,
+        validator=validator,
     )
 
     # API
@@ -89,6 +92,7 @@ async def main() -> None:
         collector=collector,
         predictor=predictor,
         smart_money_agent=smart_money,
+        validator_service=validator,
     )
     server_config = uvicorn.Config(
         app,

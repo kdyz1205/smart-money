@@ -172,3 +172,128 @@ class AnalysisParams(BaseModel):
     risk_weight: float = Field(default=0.5, ge=0.0, le=1.0)
     volume_weight: float = Field(default=0.3, ge=0.0, le=1.0)
     recency_weight: float = Field(default=0.2, ge=0.0, le=1.0)
+
+    # Validation / fill-speed params
+    fill_speed_percentile: float = Field(default=95.0, ge=50.0, le=99.9)
+    fill_speed_stealth_threshold: float = Field(default=3.0, ge=1.0)
+    fill_speed_interval_sec: float = Field(default=45.0, ge=5.0)
+    volume_surge_sm_ratio: float = Field(default=0.35, ge=0.05, le=1.0)
+    volume_surge_multiplier: float = Field(default=5.0, ge=2.0)
+    breakout_concentration_pct: float = Field(default=3.0, ge=1.0)
+    breakout_buy_sell_ratio: float = Field(default=8.0, ge=2.0)
+    wallet_high_confidence_win_rate: float = Field(default=0.65, ge=0.3, le=1.0)
+
+
+# ── Validation & fill-speed models ───────────────────────────────────
+
+
+class FillSpeedMetrics(BaseModel):
+    """Per-wallet fill-speed analysis for a specific token over a time window."""
+
+    wallet_address: str
+    token_address: str
+    token_symbol: str
+    window_start: datetime
+    window_end: datetime
+    num_trades: int
+    total_volume_usd: float
+    fill_speed_usd_per_sec: float
+    stealth_score: float  # fill_speed / market_volume_share
+    avg_trade_interval_sec: float
+    is_alert: bool = False
+
+
+class FillSpeedAlert(BaseModel):
+    """High-speed accumulation alert — one of the hardest real-time signals."""
+
+    alert_id: str
+    timestamp: datetime
+    wallet_address: str
+    token_address: str
+    token_symbol: str
+    chain: Chain
+    fill_speed_usd_per_sec: float
+    stealth_score: float
+    historical_percentile: float  # what percentile this speed is at
+    total_volume_usd: float
+    num_rapid_trades: int
+    avg_interval_sec: float
+    liquidity_pct: float  # volume as % of token liquidity
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class VolumeSurge(BaseModel):
+    """Short-term volume spike from smart-money wallets."""
+
+    surge_id: str
+    timestamp: datetime
+    token_address: str
+    token_symbol: str
+    chain: Chain
+    window_minutes: int  # 5 or 15
+    smart_money_volume_usd: float
+    total_market_volume_usd: float
+    sm_volume_ratio: float  # smart-money / total
+    vs_24h_avg_multiplier: float  # how many times 24h average
+    net_buy_volume_usd: float
+    price_change_pct: float  # price change during this window
+    is_stealth_accumulation: bool  # volume spike + price flat
+    contributing_wallets: list[str] = Field(default_factory=list)
+
+
+class BreakoutPresignal(BaseModel):
+    """Pre-breakout signal detected from smart-money behavior."""
+
+    presignal_id: str
+    timestamp: datetime
+    token_address: str
+    token_symbol: str
+    chain: Chain
+    signal_type: str  # "concentration_surge", "buy_sell_asymmetry", "coordinated_buy", "stealth_then_aggressive"
+    confidence: float = Field(ge=0.0, le=1.0)
+    detail: dict[str, Any] = Field(default_factory=dict)
+    contributing_wallets: list[str] = Field(default_factory=list)
+
+
+class BacktestResult(BaseModel):
+    """Result of historical backtesting of signal quality."""
+
+    run_id: str
+    timestamp: datetime
+    lookback_days: int
+    total_breakouts_found: int  # tokens that had 15%+ rise in 30 min
+    signals_before_breakout: int  # our signals that preceded a breakout
+    signals_total: int  # total signals in the period
+    precision: float  # signals that correctly preceded breakout / total signals
+    recall: float  # breakouts we caught / total breakouts
+    f1_score: float
+    avg_lead_time_minutes: float  # how early our signal was before breakout
+    per_signal_type: dict[str, dict[str, float]] = Field(default_factory=dict)
+
+
+class WalletPerformanceRecord(BaseModel):
+    """Rolling performance record for a smart-money wallet."""
+
+    address: str
+    chain: Chain
+    total_trades_30d: int = 0
+    winning_trades_30d: int = 0
+    win_rate_30d: float = 0.0
+    avg_pnl_pct: float = 0.0
+    best_trade_pnl_pct: float = 0.0
+    worst_trade_pnl_pct: float = 0.0
+    avg_hold_hours: float = 0.0
+    is_high_confidence: bool = False  # win_rate >= 65%
+    last_updated: datetime | None = None
+
+
+class SlippageMetrics(BaseModel):
+    """Slippage analysis for a wallet's trades on a specific token."""
+
+    wallet_address: str
+    token_address: str
+    avg_slippage_pct: float
+    max_slippage_pct: float
+    min_slippage_pct: float
+    num_trades: int
+    has_better_routing: bool = False  # low slippage + high speed = likely OTC/better router

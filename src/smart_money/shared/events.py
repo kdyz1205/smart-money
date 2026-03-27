@@ -35,6 +35,12 @@ class EventType(str, Enum):
     # SmartMoneyAgent → external consumers
     RECOMMENDATION_READY = "recommendation_ready"
 
+    # Validator → Integration / Visualization
+    FILL_SPEED_ALERT = "fill_speed_alert"
+    VOLUME_SURGE_DETECTED = "volume_surge_detected"
+    BREAKOUT_PRESIGNAL = "breakout_presignal"
+    BACKTEST_COMPLETE = "backtest_complete"
+
     # Control panel → modules
     PARAMS_UPDATED = "params_updated"
 

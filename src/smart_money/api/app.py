@@ -9,7 +9,8 @@ from ..analyzer.service import AnalyzerServiceImpl
 from ..collector.service import CollectorServiceImpl
 from ..integration.smart_money_agent import SmartMoneyAgent
 from ..predictor.service import PredictorServiceImpl
-from .routes import health, signals, wallets
+from ..validator.service import ValidatorService
+from .routes import health, signals, validator, wallets
 
 
 def create_app(
@@ -17,6 +18,7 @@ def create_app(
     collector: CollectorServiceImpl,
     predictor: PredictorServiceImpl,
     smart_money_agent: SmartMoneyAgent,
+    validator_service: ValidatorService | None = None,
 ) -> FastAPI:
     """Wire all dependencies and return a configured FastAPI app."""
     app = FastAPI(
@@ -35,10 +37,13 @@ def create_app(
     # Inject dependencies into route modules
     wallets.configure(analyzer=analyzer, collector=collector)
     signals.configure(predictor=predictor, smart_money_agent=smart_money_agent)
+    if validator_service:
+        validator.configure(validator=validator_service)
 
     # Register routers
     app.include_router(health.router)
     app.include_router(wallets.router)
     app.include_router(signals.router)
+    app.include_router(validator.router)
 
     return app
