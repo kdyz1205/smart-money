@@ -135,10 +135,11 @@ class ValidatorService:
                 rapid_interval_sec=self._params.fill_speed_interval_sec,
             )
             for alert in alerts:
-                # Record speed for future percentile calc
-                self._wallet_fill_speeds[wallet_addr].append(
-                    alert.fill_speed_usd_per_sec
-                )
+                # Record speed for future percentile calc (bounded to 1000 entries)
+                speeds = self._wallet_fill_speeds[wallet_addr]
+                speeds.append(alert.fill_speed_usd_per_sec)
+                if len(speeds) > 1000:
+                    self._wallet_fill_speeds[wallet_addr] = speeds[-1000:]
                 await self._event_bus.publish(
                     Event(event_type=EventType.FILL_SPEED_ALERT, payload=alert)
                 )
@@ -165,7 +166,7 @@ class ValidatorService:
                     txs=token_txs,
                     smart_money_addresses=self._smart_money_addresses,
                     total_market_volume_usd=total_vol,
-                    avg_volume_24h_usd=total_vol * 288,  # rough estimate
+                    avg_volume_24h_usd=max(total_vol * 288 / max(window_min, 1), 1.0),
                     current_price=1.0,
                     price_at_window_start=1.0,
                     window_minutes=window_min,

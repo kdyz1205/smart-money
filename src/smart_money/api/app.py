@@ -10,7 +10,7 @@ from ..collector.service import CollectorServiceImpl
 from ..integration.smart_money_agent import SmartMoneyAgent
 from ..predictor.service import PredictorServiceImpl
 from ..validator.service import ValidatorService
-from .routes import health, signals, validator, wallets
+from .routes import health, signals, token_analysis, validator, wallets
 
 
 def create_app(
@@ -45,5 +45,6 @@ def create_app(
     app.include_router(wallets.router)
     app.include_router(signals.router)
     app.include_router(validator.router)
+    app.include_router(token_analysis.router)
 
     return app

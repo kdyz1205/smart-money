@@ -23,6 +23,7 @@ def cluster_wallets(
     method: str = "dbscan",
     min_samples: int = 5,
     n_clusters: int = 8,
+    chain: Chain = Chain.ETH,
 ) -> list[WalletProfile]:
     """Assign cluster IDs to wallets based on their feature vectors.
 
@@ -35,7 +36,7 @@ def cluster_wallets(
             min_samples,
         )
         return [
-            WalletProfile(address=f.address, chain=Chain.ETH, cluster_id=-1)
+            WalletProfile(address=f.address, chain=chain, cluster_id=-1)
             for f in features
         ]
 
@@ -55,7 +56,7 @@ def cluster_wallets(
         profiles.append(
             WalletProfile(
                 address=feat.address,
-                chain=Chain.ETH,
+                chain=chain,
                 cluster_id=int(label),
                 total_tx_count=int(feat.tx_frequency_7d),
                 avg_hold_duration_hours=feat.avg_hold_duration_hours,

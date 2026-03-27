@@ -46,7 +46,7 @@ def detect_concentration_surge(
     older_count, older_vol = sm_stats(older_txs)
 
     if older_count == 0 and recent_count >= 3:
-        increase_pct = float("inf")
+        increase_pct = 10.0  # cap at 10x when no older baseline
     elif older_count > 0:
         increase_pct = (recent_count - older_count) / older_count
     else:
@@ -69,7 +69,7 @@ def detect_concentration_surge(
         token_symbol=token_sym,
         chain=recent_txs[0].chain if recent_txs else Chain.ETH,
         signal_type="concentration_surge",
-        confidence=min(1.0, increase_pct / 5.0),
+        confidence=min(1.0, (increase_pct + 1.0) / 4.0),  # 3x → 1.0, 1x → 0.5
         detail={
             "recent_sm_wallets": recent_count,
             "older_sm_wallets": older_count,
@@ -93,13 +93,13 @@ def detect_buy_sell_asymmetry(
     """
     buy_volume = 0.0
     sell_volume = 0.0
-    buy_prices: list[float] = []
+    buy_sizes: list[float] = []
 
     for tx in txs:
         vol = float(tx.value_wei)
         if tx.from_addr.lower() in smart_money_addresses:
             buy_volume += vol
-            buy_prices.append(vol)  # proxy for price
+            buy_sizes.append(vol)
         elif tx.to_addr.lower() in smart_money_addresses:
             sell_volume += vol
 
@@ -113,8 +113,8 @@ def detect_buy_sell_asymmetry(
     if ratio < ratio_threshold:
         return None
 
-    avg_buy_price = float(np.mean(buy_prices)) if buy_prices else 0.0
-    is_below_market = avg_buy_price < current_price_wei
+    avg_buy_size = float(np.mean(buy_sizes)) if buy_sizes else 0.0
+    is_below_market = avg_buy_size < current_price_wei
 
     token_addr = txs[0].token_address or txs[0].to_addr if txs else ""
     token_sym = next((tx.token_symbol for tx in txs if tx.token_symbol), "UNKNOWN")
@@ -136,6 +136,7 @@ def detect_buy_sell_asymmetry(
             "buy_volume": buy_volume,
             "sell_volume": sell_volume,
             "ratio": round(ratio, 2),
+            "avg_buy_size": avg_buy_size,
             "avg_buy_below_market": is_below_market,
         },
         contributing_wallets=wallets,

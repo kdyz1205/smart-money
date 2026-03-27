@@ -9,6 +9,7 @@ class Chain(str, Enum):
     ARB = "arbitrum"
     BASE = "base"
     POLYGON = "polygon"
+    SOL = "solana"
 
 
 class SignalType(str, Enum):

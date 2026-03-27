@@ -25,6 +25,7 @@ class AnalyzerServiceImpl:
         self._event_bus = event_bus
         self._params = params or AnalysisParams()
         self._profiles: dict[str, WalletProfile] = {}
+        self._last_features: list[WalletFeatures] = []
 
     def update_params(self, params: AnalysisParams) -> None:
         self._params = params
@@ -33,6 +34,7 @@ class AnalyzerServiceImpl:
     async def analyze_wallets(self, txs: list[Transaction]) -> list[WalletProfile]:
         """Full pipeline: features → clustering → anomaly → smart money scoring."""
         features = self.extract_features(txs)
+        self._last_features = features
         if not features:
             return []
 
@@ -49,12 +51,13 @@ class AnalyzerServiceImpl:
         )
 
         # Step 3: Merge anomaly scores into profiles and compute smart-money score
-        anomaly_map = {feat.address: score for feat, score in anomalies}
-        feat_map = {f.address: f for f in features}
+        anomaly_map = {feat.address.lower(): score for feat, score in anomalies}
+        feat_map = {f.address.lower(): f for f in features}
 
         for profile in profiles:
-            a_score = anomaly_map.get(profile.address, 0.0)
-            feat = feat_map.get(profile.address)
+            key = profile.address.lower()
+            a_score = anomaly_map.get(key, 0.0)
+            feat = feat_map.get(key)
             if feat:
                 profile.smart_money_score = compute_smart_money_score(
                     anomaly_score=a_score,
@@ -100,3 +103,7 @@ class AnalyzerServiceImpl:
 
     def get_all_profiles(self) -> list[WalletProfile]:
         return list(self._profiles.values())
+
+    def get_last_features(self) -> list[WalletFeatures]:
+        """Return the features from the most recent analyze_wallets call."""
+        return self._last_features

@@ -120,7 +120,9 @@ class CryptoAnalysisAgent:
         # In production: call real API. For now, return structure expected downstream.
         try:
             if self._session is None or self._session.closed:
-                self._session = aiohttp.ClientSession()
+                self._session = aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=10)
+                )
 
             # OKX market ticker endpoint
             url = "https://www.okx.com/api/v5/market/ticker"

@@ -41,6 +41,7 @@ def compute_wallet_performance(
     address: str,
     trades: list[dict],
     lookback_days: int = 30,
+    chain: Chain = Chain.ETH,
 ) -> WalletPerformanceRecord:
     """Compute rolling performance for a wallet.
 
@@ -57,7 +58,7 @@ def compute_wallet_performance(
     ]
 
     if not recent_trades:
-        return WalletPerformanceRecord(address=address, chain=Chain.ETH)
+        return WalletPerformanceRecord(address=address, chain=chain)
 
     pnl_pcts: list[float] = []
     hold_hours: list[float] = []
@@ -77,7 +78,7 @@ def compute_wallet_performance(
 
     record = WalletPerformanceRecord(
         address=address,
-        chain=Chain.ETH,
+        chain=chain,
         total_trades_30d=total,
         winning_trades_30d=wins,
         win_rate_30d=round(wins / max(total, 1), 4),

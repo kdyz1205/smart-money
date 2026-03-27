@@ -54,17 +54,19 @@ class PredictorServiceImpl:
             token_symbol = next(
                 (tx.token_symbol for tx in ttxs if tx.token_symbol), "UNKNOWN"
             )
+            # Infer chain from first tx
+            tx_chain = ttxs[0].chain if ttxs else None
 
             # Separate buy/sell volumes (heuristic: from smart-money = buy intent tracking)
-            smart_addrs = {p.address for p in profiles if p.is_smart_money}
+            smart_addrs = {p.address.lower() for p in profiles if p.is_smart_money}
             buy_vols = [
-                float(tx.value_wei) for tx in ttxs if tx.from_addr in smart_addrs
+                float(tx.value_wei) for tx in ttxs if tx.from_addr.lower() in smart_addrs
             ]
             sell_vols = [
-                float(tx.value_wei) for tx in ttxs if tx.from_addr not in smart_addrs
+                float(tx.value_wei) for tx in ttxs if tx.from_addr.lower() not in smart_addrs
             ]
             timestamps = [tx.timestamp.timestamp() for tx in ttxs]
-            wallet_addrs = list({tx.from_addr for tx in ttxs if tx.from_addr in smart_addrs})
+            wallet_addrs = list({tx.from_addr.lower() for tx in ttxs if tx.from_addr.lower() in smart_addrs})
 
             # 1. Accumulation detection
             acc = detect_accumulation(
@@ -76,22 +78,28 @@ class PredictorServiceImpl:
                 wallet_addresses=wallet_addrs,
             )
             if acc:
-                sig = create_signal_from_accumulation(acc, profile_map)
+                from ..shared.constants import Chain
+                sig = create_signal_from_accumulation(
+                    acc, profile_map, chain=tx_chain or Chain.ETH
+                )
                 signals.append(sig)
 
             # 2. Coordinated buying detection
             wallet_buy_times: dict[str, list[float]] = defaultdict(list)
             for tx in ttxs:
-                if tx.from_addr in smart_addrs:
-                    wallet_buy_times[tx.from_addr].append(tx.timestamp.timestamp())
+                addr_lower = tx.from_addr.lower()
+                if addr_lower in smart_addrs:
+                    wallet_buy_times[addr_lower].append(tx.timestamp.timestamp())
 
             coordinated = detect_coordinated_buying(wallet_buy_times)
             if coordinated:
+                from ..shared.constants import Chain
                 sig = create_coordinated_buy_signal(
                     token_address=token_addr,
                     token_symbol=token_symbol,
                     wallet_addresses=coordinated,
                     profiles=profile_map,
+                    chain=tx_chain or Chain.ETH,
                 )
                 signals.append(sig)
 

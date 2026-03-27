@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     poll_interval_sec: float = DEFAULT_POLL_INTERVAL_SEC
     api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    api_port: int = 8001
 
     # Analysis parameters
     anomaly_contamination: float = DEFAULT_ANOMALY_CONTAMINATION

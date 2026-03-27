@@ -86,7 +86,7 @@ class EventBus:
         try:
             while self._running:
                 event = await self._queue.get()
-                handlers = self._subscribers.get(event.event_type, [])
+                handlers = list(self._subscribers.get(event.event_type, []))
                 for handler in handlers:
                     asyncio.create_task(self._safe_dispatch(handler, event))
         except asyncio.CancelledError:

@@ -10,7 +10,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from ..shared.constants import RiskLevel, SignalType
+from ..shared.constants import Chain, RiskLevel, SignalType
 from ..shared.models import Signal, WalletProfile
 from .timeseries import AccumulationSignal
 
@@ -20,12 +20,9 @@ logger = logging.getLogger(__name__)
 def create_signal_from_accumulation(
     acc: AccumulationSignal,
     profiles: dict[str, WalletProfile],
-    chain_str: str = "ethereum",
+    chain: Chain = Chain.ETH,
 ) -> Signal:
     """Convert an AccumulationSignal into a full Signal with risk scoring."""
-    from ..shared.constants import Chain
-
-    chain = Chain(chain_str)
 
     # Compute aggregate smart-money score from contributing wallets
     sm_scores = [
@@ -69,12 +66,9 @@ def create_coordinated_buy_signal(
     token_symbol: str,
     wallet_addresses: list[str],
     profiles: dict[str, WalletProfile],
-    chain_str: str = "ethereum",
+    chain: Chain = Chain.ETH,
 ) -> Signal:
     """Create a signal for coordinated buying activity."""
-    from ..shared.constants import Chain
-
-    chain = Chain(chain_str)
 
     sm_scores = [
         profiles[addr].smart_money_score

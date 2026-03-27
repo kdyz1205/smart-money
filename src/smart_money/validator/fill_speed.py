@@ -165,6 +165,8 @@ def detect_fill_speed_alerts(
             else:
                 pctile = 99.0
 
+            # Infer chain from first transaction
+            tx_chain = txs[0].chain if txs else Chain.ETH
             alerts.append(
                 FillSpeedAlert(
                     alert_id=str(uuid.uuid4()),
@@ -172,7 +174,7 @@ def detect_fill_speed_alerts(
                     wallet_address=wallet_address,
                     token_address=token_addr,
                     token_symbol=metrics.token_symbol,
-                    chain=Chain.ETH,
+                    chain=tx_chain,
                     fill_speed_usd_per_sec=metrics.fill_speed_usd_per_sec,
                     stealth_score=metrics.stealth_score,
                     historical_percentile=pctile,

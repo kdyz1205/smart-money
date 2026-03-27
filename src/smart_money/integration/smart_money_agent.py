@@ -96,11 +96,11 @@ class SmartMoneyAgent:
         """Full pipeline: analyze → predict → recommend."""
         txs: list[Transaction] = event.payload
 
-        # Step 1: Wallet analysis
+        # Step 1: Wallet analysis (includes feature extraction internally)
         profiles = await self._analyzer.analyze_wallets(txs)
 
-        # Step 2: Feature extraction
-        features = self._analyzer.extract_features(txs)
+        # Step 2: Feature extraction (reuse cached features from analyze_wallets)
+        features = self._analyzer.get_last_features()
 
         # Step 3: Prediction
         signals = await self._predictor.predict(profiles, features, txs)

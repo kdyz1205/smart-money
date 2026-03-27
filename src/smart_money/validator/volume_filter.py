@@ -80,9 +80,10 @@ def detect_volume_surges(
     net_buy_pct = abs(net_buy) / max(avg_volume_24h_usd, 1.0)
 
     # Price change in window
-    price_change_pct = (
-        (current_price - price_at_window_start) / max(price_at_window_start, 0.001) * 100
-    )
+    if price_at_window_start > 0:
+        price_change_pct = (current_price - price_at_window_start) / price_at_window_start * 100
+    else:
+        price_change_pct = 0.0
 
     # Check if any threshold is exceeded
     is_surge = (
