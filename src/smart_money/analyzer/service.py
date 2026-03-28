@@ -28,6 +28,10 @@ class AnalyzerServiceImpl:
         self._last_features: list[WalletFeatures] = []
 
     def update_params(self, params: AnalysisParams) -> None:
+        # Validate critical params before accepting
+        if not (0.01 <= params.anomaly_contamination <= 0.5):
+            logger.warning("Invalid anomaly_contamination=%.2f, clamping", params.anomaly_contamination)
+            params.anomaly_contamination = max(0.01, min(0.5, params.anomaly_contamination))
         self._params = params
         logger.info("Analyzer params updated: %s", params.model_dump_json())
 

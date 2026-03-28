@@ -33,7 +33,12 @@ class IngestionPipeline:
         self._tracked_wallets: set[str] = set()
         self._running = False
 
+    MAX_TRACKED_WALLETS = 500
+
     def add_wallet(self, address: str) -> None:
+        if len(self._tracked_wallets) >= self.MAX_TRACKED_WALLETS:
+            logger.warning("Max tracked wallets (%d) reached, ignoring %s", self.MAX_TRACKED_WALLETS, address)
+            return
         self._tracked_wallets.add(address.lower())
 
     def remove_wallet(self, address: str) -> None:
@@ -55,21 +60,27 @@ class IngestionPipeline:
 
     async def _poll_all(self) -> None:
         """Fan-out fetch for all tracked wallets across all clients."""
+        wallets = list(self._tracked_wallets)
         tasks = [
             self._fetch_wallet(client, addr)
             for client in self._clients
-            for addr in list(self._tracked_wallets)
+            for addr in wallets
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
+        error_count = 0
         new_txs: list[Transaction] = []
         for result in results:
             if isinstance(result, Exception):
+                error_count += 1
                 logger.error("Fetch error: %s", result)
                 continue
             for tx in result:
                 if self._cache.is_new(tx.tx_hash):
                     new_txs.append(tx)
+
+        if error_count == len(tasks) and len(tasks) > 0:
+            logger.error("All %d fetch tasks failed — possible network issue", len(tasks))
 
         if new_txs:
             logger.info("Publishing %d new transactions", len(new_txs))

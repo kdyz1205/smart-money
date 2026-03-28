@@ -52,8 +52,9 @@ def detect_concentration_surge(
     else:
         return None
 
-    count_surge = increase_pct >= (threshold_pct - 1.0)  # 300% = 3x original
-    vol_surge = recent_vol > older_vol * (threshold_pct - 0.5) if older_vol > 0 else recent_vol > 0
+    # threshold_pct=3.0 means 300% increase = 3x the original count
+    count_surge = increase_pct >= threshold_pct
+    vol_surge = recent_vol > older_vol * threshold_pct if older_vol > 0 else recent_vol > 0
 
     if not (count_surge or vol_surge):
         return None

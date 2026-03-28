@@ -54,8 +54,12 @@ async def track_wallet(address: str) -> dict:
     """Start tracking a wallet address."""
     if not _collector:
         raise HTTPException(status_code=503, detail="Collector not ready")
-    await _collector.add_wallet(address)
-    return {"status": "tracking", "address": address}
+    # Basic address validation
+    addr = address.strip()
+    if not addr or len(addr) < 10:
+        raise HTTPException(status_code=400, detail="Invalid wallet address")
+    await _collector.add_wallet(addr)
+    return {"status": "tracking", "address": addr.lower()}
 
 
 @router.delete("/track/{address}")

@@ -131,14 +131,14 @@ class CryptoAnalysisAgent:
         try:
             if self._session is None or self._session.closed:
                 self._session = aiohttp.ClientSession(
-                    timeout=aiohttp.ClientTimeout(total=10),
+                    timeout=aiohttp.ClientTimeout(total=8),
                     trust_env=True,
                 )
 
             # OKX market ticker endpoint
             url = "https://www.okx.com/api/v5/market/ticker"
             params = {"instId": f"{token_symbol}-USDT"}
-            async with self._session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            async with self._session.get(url, params=params) as resp:
                 if resp.status != 200:
                     return None
                 data = await resp.json()

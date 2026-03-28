@@ -18,12 +18,16 @@ def extract_features(txs: list[Transaction]) -> list[WalletFeatures]:
     if not txs:
         return []
 
-    # Group transactions by all participating addresses (both sender and receiver)
+    # Group transactions by participating addresses
+    # Only include from_addr (senders). Including to_addr contaminates
+    # analysis with contract/pool addresses that receive all trades.
     by_wallet: dict[str, list[Transaction]] = defaultdict(list)
     for tx in txs:
-        by_wallet[tx.from_addr.lower()].append(tx)
-        if tx.to_addr.lower() != tx.from_addr.lower():
-            by_wallet[tx.to_addr.lower()].append(tx)
+        from_lower = tx.from_addr.lower()
+        # Skip obvious non-wallet addresses
+        if from_lower in ("unknown", "") or from_lower.startswith(("pool_", "anon_")):
+            continue
+        by_wallet[from_lower].append(tx)
 
     now = datetime.now(timezone.utc)
     results: list[WalletFeatures] = []

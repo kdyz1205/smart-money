@@ -68,8 +68,8 @@ def compute_smart_money_score(
     # Win rate component (0 to 1)
     win_component = max(0.0, min(1.0, win_rate))
 
-    # Volume component (log-scaled, arbitrary cap at 1e18 wei ~ 1 ETH)
-    vol_component = min(1.0, np.log1p(volume_usd) / 40.0)
+    # Volume component (log-scaled, guard against negative values)
+    vol_component = min(1.0, np.log1p(max(0.0, volume_usd)) / 40.0)
 
     score = (
         0.4 * anomaly_component

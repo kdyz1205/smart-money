@@ -109,6 +109,7 @@ def run_backtest(
     # Match signals to breakouts
     signals_matched = 0
     breakouts_caught = 0
+    late_signals = 0  # signals after breakout
     lead_times: list[float] = []
     matched_breakout_ids: set[int] = set()
 
@@ -122,6 +123,11 @@ def run_backtest(
             lead_time = (
                 breakout.breakout_time - signal.timestamp
             ).total_seconds() / 60
+
+            # Track late signals (negative lead time = signal after breakout)
+            if lead_time < 0:
+                late_signals += 1
+                continue
 
             if 0 < lead_time <= max_lead_time_minutes:
                 if b_idx not in matched_breakout_ids:

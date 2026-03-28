@@ -94,6 +94,8 @@ class SmartMoneyAgent:
 
     async def _on_new_transactions(self, event: Event) -> None:
         """Full pipeline: analyze → predict → recommend."""
+        if not isinstance(event.payload, list) or not event.payload:
+            return
         txs: list[Transaction] = event.payload
 
         # Step 1: Wallet analysis (includes feature extraction internally)
@@ -128,6 +130,8 @@ class SmartMoneyAgent:
 
     async def _on_market_context(self, event: Event) -> None:
         """Cache market context from the CryptoAnalysisAgent."""
+        if not isinstance(event.payload, MarketContext):
+            return
         ctx: MarketContext = event.payload
         self._market_contexts[ctx.token_symbol] = ctx
         logger.debug("Market context updated for %s: %s", ctx.token_symbol, ctx.trend)

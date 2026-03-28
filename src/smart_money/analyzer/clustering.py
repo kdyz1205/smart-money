@@ -47,7 +47,8 @@ def cluster_wallets(
     if method == "dbscan":
         model = DBSCAN(eps=0.5, min_samples=min_samples)
     else:
-        model = KMeans(n_clusters=min(n_clusters, len(features)), n_init="auto")
+        effective_k = min(n_clusters, max(2, len(features) // 3))
+        model = KMeans(n_clusters=effective_k, n_init="auto")
 
     labels = model.fit_predict(X_scaled)
 

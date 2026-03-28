@@ -82,14 +82,20 @@ class EventBus:
     async def run(self) -> None:
         """Main dispatch loop — run as a long-lived asyncio task."""
         self._running = True
+        self._pending_tasks: set[asyncio.Task] = set()
         logger.info("EventBus started")
         try:
             while self._running:
                 event = await self._queue.get()
                 handlers = list(self._subscribers.get(event.event_type, []))
                 for handler in handlers:
-                    asyncio.create_task(self._safe_dispatch(handler, event))
+                    task = asyncio.create_task(self._safe_dispatch(handler, event))
+                    self._pending_tasks.add(task)
+                    task.add_done_callback(self._pending_tasks.discard)
         except asyncio.CancelledError:
+            # Wait for in-flight handlers to finish
+            if self._pending_tasks:
+                await asyncio.gather(*self._pending_tasks, return_exceptions=True)
             logger.info("EventBus shutting down")
 
     async def _safe_dispatch(self, handler: Handler, event: Event) -> None:

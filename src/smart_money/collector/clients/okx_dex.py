@@ -20,6 +20,7 @@ _CHAIN_IDS: dict[Chain, str] = {
     Chain.ARB: "42161",
     Chain.BASE: "8453",
     Chain.POLYGON: "137",
+    Chain.SOL: "501",
 }
 
 

@@ -83,6 +83,9 @@ class ValidatorService:
 
     async def _on_new_transactions(self, event: Event) -> None:
         """Run fill-speed, volume-surge, and breakout detection on new txs."""
+        if not isinstance(event.payload, list):
+            logger.warning("Invalid payload type for NEW_TRANSACTIONS: %s", type(event.payload))
+            return
         txs: list[Transaction] = event.payload
         self._recent_txs.extend(txs)
         if len(self._recent_txs) > self._max_recent_txs:
@@ -98,6 +101,9 @@ class ValidatorService:
 
     async def _on_signal(self, event: Event) -> None:
         """Record signal for backtesting."""
+        if not isinstance(event.payload, Signal):
+            logger.warning("Invalid payload type for SIGNAL_GENERATED: %s", type(event.payload))
+            return
         signal: Signal = event.payload
         self._signal_history.append(signal)
         if len(self._signal_history) > 10_000:
@@ -105,6 +111,9 @@ class ValidatorService:
 
     async def _on_smart_money(self, event: Event) -> None:
         """Update smart money address set."""
+        if not isinstance(event.payload, list):
+            logger.warning("Invalid payload type for SMART_MONEY_IDENTIFIED: %s", type(event.payload))
+            return
         profiles: list[WalletProfile] = event.payload
         for p in profiles:
             if p.is_smart_money:
