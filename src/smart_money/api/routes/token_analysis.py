@@ -148,8 +148,11 @@ async def _fetch_dexscreener_overview(token_address: str) -> dict | None:
                 pairs = data.get("pairs") or []
                 if not pairs:
                     return None
-                # Return the pair with highest volume
-                return max(pairs, key=lambda p: float(p.get("volume", {}).get("h24", 0) or 0))
+                # Return the pair with highest volume (guard against empty after filter)
+                valid_pairs = [p for p in pairs if isinstance(p, dict)]
+                if not valid_pairs:
+                    return None
+                return max(valid_pairs, key=lambda p: float(p.get("volume", {}).get("h24", 0) or 0))
     except Exception as e:
         logger.error("DexScreener fetch failed: %s", e)
         return None
@@ -159,13 +162,14 @@ async def _fetch_gecko_trades(network: str, pool_address: str) -> list[dict]:
     """Fetch recent trades from GeckoTerminal."""
     url = f"{GECKO_TERMINAL_BASE}/networks/{network}/pools/{pool_address}/trades"
     all_trades: list[dict] = []
+    max_trades = 500  # cap to prevent memory explosion
     try:
         async with aiohttp.ClientSession(trust_env=True) as session:
             # Fetch multiple pages for more data
             for _page in range(3):
                 params = {"trade_volume_in_usd_greater_than": "10"}
                 async with session.get(
-                    url, params=params, timeout=aiohttp.ClientTimeout(total=15)
+                    url, params=params, timeout=aiohttp.ClientTimeout(total=10)
                 ) as resp:
                     if resp.status != 200:
                         break
@@ -177,6 +181,9 @@ async def _fetch_gecko_trades(network: str, pool_address: str) -> list[dict]:
                     if not trades:
                         break
                     all_trades.extend(trades)
+                    if len(all_trades) >= max_trades:
+                        all_trades = all_trades[:max_trades]
+                        break
                     # GeckoTerminal doesn't always paginate the same way
                     break
     except Exception as e:
@@ -200,18 +207,26 @@ def _gecko_trades_to_transactions(
 
         # Parse timestamp (GeckoTerminal uses ISO 8601 or Unix ms)
         ts_str = attrs.get("block_timestamp")
-        ts = datetime.now(timezone.utc)
+        ts = None
         if ts_str:
             try:
                 if isinstance(ts_str, (int, float)):
-                    ts = datetime.fromtimestamp(ts_str, tz=timezone.utc)
-                elif ts_str.isdigit():
-                    # Unix timestamp in milliseconds
-                    ts = datetime.fromtimestamp(int(ts_str) / 1000, tz=timezone.utc)
-                else:
+                    # Auto-detect seconds vs milliseconds
+                    val = float(ts_str)
+                    if val > 1e12:
+                        val = val / 1000
+                    ts = datetime.fromtimestamp(val, tz=timezone.utc)
+                elif isinstance(ts_str, str) and ts_str.isdigit():
+                    val = int(ts_str)
+                    if val > 1e12:
+                        val = val // 1000
+                    ts = datetime.fromtimestamp(val, tz=timezone.utc)
+                elif isinstance(ts_str, str):
                     ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
             except (ValueError, TypeError, OSError):
-                pass
+                logger.debug("Failed to parse timestamp: %s", ts_str)
+        if ts is None:
+            ts = datetime.now(timezone.utc)
 
         # Convert volume to a wei-like integer (scale by 1e18 for pipeline compatibility)
         value_wei = int(volume_usd * 1e12)  # scale factor for analysis

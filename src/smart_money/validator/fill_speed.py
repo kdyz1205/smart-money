@@ -59,9 +59,10 @@ def analyze_fill_speed(
     total_volume = sum(float(tx.value_wei) for tx in sorted_txs)
     fill_speed = total_volume / elapsed
 
-    # Stealth score: how much volume relative to market
+    # Stealth score: how much volume relative to market (capped 0-100)
     wallet_share = total_volume / max(market_volume_usd, 1.0)
-    stealth_score = fill_speed / max(wallet_share, 0.001)
+    raw_stealth = fill_speed / max(wallet_share, 0.001)
+    stealth_score = min(100.0, raw_stealth)
 
     # Average interval between trades
     intervals = []
@@ -162,6 +163,7 @@ def detect_fill_speed_alerts(
                     / max(len(historical_speeds), 1)
                     * 100
                 )
+                pctile = max(0.0, min(100.0, pctile))
             else:
                 pctile = 99.0
 

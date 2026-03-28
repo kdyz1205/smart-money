@@ -44,7 +44,8 @@ class CryptoAnalysisAgent:
         self._event_bus = event_bus
         self._config = config
         self._tracked_tokens: set[str] = set()
-        self._market_cache: dict[str, MarketContext] = {}
+        self._market_cache: dict[str, tuple[float, MarketContext]] = {}  # (timestamp, ctx)
+        self._cache_ttl_sec = 300.0  # 5 minute cache TTL
         self._running = False
         self._session: aiohttp.ClientSession | None = None
 
@@ -85,10 +86,19 @@ class CryptoAnalysisAgent:
         Combines price data, volume, and basic trend analysis.
         In production, this would call CoinGecko, DEX APIs, etc.
         """
+        # Check cache with TTL
+        import time as _time
+        cached = self._market_cache.get(token_symbol)
+        if cached:
+            cache_ts, cache_ctx = cached
+            if _time.time() - cache_ts < self._cache_ttl_sec:
+                return cache_ctx
+
         try:
             price_data = await self._fetch_price_data(token_symbol)
             if not price_data:
-                return None
+                # Return stale cache if available
+                return cached[1] if cached else None
 
             trend = self._compute_trend(price_data)
             volatility = self._compute_volatility(price_data)
@@ -105,12 +115,12 @@ class CryptoAnalysisAgent:
                 timestamp=datetime.now(timezone.utc),
             )
 
-            self._market_cache[token_symbol] = context
+            self._market_cache[token_symbol] = (_time.time(), context)
             return context
 
         except Exception:
             logger.exception("Failed to get market context for %s", token_symbol)
-            return self._market_cache.get(token_symbol)
+            return cached[1] if cached else None
 
     async def _fetch_price_data(self, token_symbol: str) -> dict | None:
         """Fetch price data from external API.
@@ -166,7 +176,8 @@ class CryptoAnalysisAgent:
         return min(1.0, change / 20.0)
 
     def get_cached_context(self, token_symbol: str) -> MarketContext | None:
-        return self._market_cache.get(token_symbol)
+        cached = self._market_cache.get(token_symbol)
+        return cached[1] if cached else None
 
     async def monitor_markets(self, interval_sec: float = 60.0) -> None:
         """Periodically refresh market data for all tracked tokens."""

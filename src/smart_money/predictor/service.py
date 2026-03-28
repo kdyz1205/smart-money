@@ -50,7 +50,12 @@ class PredictorServiceImpl:
             if key:
                 token_txs[key].append(tx)
 
+        smart_addrs = {p.address.lower() for p in profiles if p.is_smart_money}
+
         for token_addr, ttxs in token_txs.items():
+            if not token_addr or not ttxs:
+                continue
+
             token_symbol = next(
                 (tx.token_symbol for tx in ttxs if tx.token_symbol), "UNKNOWN"
             )
@@ -58,7 +63,6 @@ class PredictorServiceImpl:
             tx_chain = ttxs[0].chain if ttxs else None
 
             # Separate buy/sell volumes (heuristic: from smart-money = buy intent tracking)
-            smart_addrs = {p.address.lower() for p in profiles if p.is_smart_money}
             buy_vols = [
                 float(tx.value_wei) for tx in ttxs if tx.from_addr.lower() in smart_addrs
             ]
